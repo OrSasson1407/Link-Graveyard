@@ -33,9 +33,9 @@ jobs:
       - name: Run unit tests
         run: npm run test:cov
         env:
-          DATABASE_URL: postgresql://user:pass@localhost:5432/link_graveyard_test
+          DATABASE_URL: postgresql://user:pass@localhost:5439/link_graveyard_test
           REDIS_HOST: localhost
-          REDIS_PORT: 6379
+          REDIS_PORT: 6380  
           JWT_SECRET: test-secret
           JWT_REFRESH_SECRET: test-refresh-secret
 
