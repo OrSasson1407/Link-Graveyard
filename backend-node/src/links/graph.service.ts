@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 
 @Injectable()
@@ -12,14 +12,14 @@ export class GraphService {
 
     const links = await this.prisma.link.findMany({
       where: { userId },
-      include: { metadata: true, context: true },
+      include: { metadata: true, intent: true },
     });
 
     const nodes = links.map((l) => ({
       id: l.id,
       label: l.metadata?.title || l.originalUrl,
       category: l.category,
-      intent: l.context?.inferredAction,
+      intent: l.intent?.inferredAction,
     }));
 
     const edges: { source: string; target: string; weight: number }[] = [];
@@ -30,7 +30,7 @@ export class GraphService {
         const b = links[j];
         let weight = 0;
         if (a.category && a.category === b.category) weight += 2;
-        if (a.context?.inferredAction && a.context.inferredAction === b.context?.inferredAction) weight += 1;
+        if (a.intent?.inferredAction && a.intent.inferredAction === b.intent?.inferredAction) weight += 1;
         if (weight > 0) edges.push({ source: a.id, target: b.id, weight });
       }
     }
@@ -38,3 +38,4 @@ export class GraphService {
     return { nodes, edges };
   }
 }
+

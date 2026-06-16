@@ -1,4 +1,4 @@
-﻿import { Process, Processor } from '@nestjs/bull';
+import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { QueueService } from './queue.service';
@@ -56,7 +56,7 @@ export class QueueProcessor {
               update: { title: title || url, aiSummary: result.summary, dynamicData: { tags: result.dynamic_tags } },
             },
           },
-          context: { update: { inferredAction: result.intent } },
+          intent: { upsert: { create: { source: 'ai', inferredAction: result.intent }, update: { inferredAction: result.intent } } },
         },
       });
 
@@ -75,3 +75,4 @@ export class QueueProcessor {
     this.logger.log('Processing reminder schedule job for userId=' + userId);
   }
 }
+

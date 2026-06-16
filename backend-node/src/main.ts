@@ -5,13 +5,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: ['http://localhost:5173', 'http://localhost:3001'],
+    origin: ['http://localhost:5173', 'http://localhost:3000'],
     credentials: true,
   });
 
   app.setGlobalPrefix('api/v1');
 
-  await app.listen(3000);
-  console.log('API Gateway running on http://localhost:3000');
+  await app.listen(3001);
+  console.log('API Gateway running on http://localhost:3001');
 }
 bootstrap();
