@@ -4,10 +4,10 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # Redis
-    redis_url: str = "redis://localhost:6379"
+    redis_url: str = "redis://localhost:6380"
 
     # PostgreSQL
-    database_url: str = "postgresql+asyncpg://user:pass@localhost:5432/link_graveyard"
+    database_url: str = "postgresql+asyncpg://user:pass@localhost:5439/link_graveyard"
 
     # OpenAI
     openai_api_key: Optional[str] = None
@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     playwright_headless: bool = True
 
     # Celery
-    celery_broker_url: str = "redis://localhost:6379/0"
-    celery_result_backend: str = "redis://localhost:6379/1"
+    celery_broker_url: str = "redis://localhost:6380/0"
+    celery_result_backend: str = "redis://localhost:6380/1"
 
     class Config:
         env_file = ".env"
