@@ -1,0 +1,109 @@
+# =========================
+# Environment Variables (CRITICAL)
+# =========================
+.env
+.env.*
+!.env.example
+!.env.template
+
+# =========================
+# OS / IDE / Root Files
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.eslintcache
+
+# =========================
+# Node.js (NestJS, React, React Native)
+# backend-node / frontend-mobile / web-extension
+# =========================
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build Outputs
+dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# =========================
+# Python (FastAPI Worker)
+# backend-python
+# =========================
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+env/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing & Coverage
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+
+# Playwright & Scraping
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# =========================
+# React Native Specifics
+# frontend-mobile
+# =========================
+# iOS
+frontend-mobile/ios/Pods/
+frontend-mobile/ios/build/
+frontend-mobile/ios/*.xcworkspace/xcuserdata/
+frontend-mobile/ios/*.xcodeproj/xcuserdata/
+
+# Android
+frontend-mobile/android/.gradle/
+frontend-mobile/android/build/
+frontend-mobile/android/app/build/
+frontend-mobile/android/app/src/main/assets/
+*.keystore
+!debug.keystore
+
+# Expo (If used within React Native)
+.expo/
+
+# =========================
+# Docker & Infrastructure
+# =========================
+# Ignore local database volume mounts if created in the root
+pgdata/
+redis_data/

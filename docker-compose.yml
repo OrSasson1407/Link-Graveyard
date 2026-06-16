@@ -1,0 +1,125 @@
+﻿version: '3.8'
+
+services:
+  api-gateway:
+    build:
+      context: ./backend-node
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://user:pass@postgres:5432/link_graveyard
+      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=change-me-in-production
+      - JWT_REFRESH_SECRET=change-me-refresh-in-production
+      - INTERNAL_WORKER_SECRET=changeme-internal-secret
+      - CORS_ORIGIN=http://localhost:3001
+      - SENTRY_DSN=
+      - OPENAI_API_KEY=
+      - GITHUB_TOKEN=
+      - AMAZON_AFFILIATE_TAG=
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - link-graveyard-net
+
+  python-worker:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=postgresql+asyncpg://user:pass@postgres:5432/link_graveyard
+      - OPENAI_API_KEY=
+      - NESTJS_CALLBACK_URL=http://api-gateway:3000/api/v1/webhooks/worker/callback
+      - INTERNAL_WORKER_SECRET=changeme-internal-secret
+      - SENTRY_DSN=
+    depends_on:
+      redis:
+        condition: service_healthy
+      api-gateway:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - link-graveyard-net
+
+  celery-worker:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    command: celery -A app.worker.tasks.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=postgresql+asyncpg://user:pass@postgres:5432/link_graveyard
+      - OPENAI_API_KEY=
+      - NESTJS_CALLBACK_URL=http://api-gateway:3000/api/v1/webhooks/worker/callback
+      - INTERNAL_WORKER_SECRET=changeme-internal-secret
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - link-graveyard-net
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=link_graveyard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d link_graveyard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - link-graveyard-net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - link-graveyard-net
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - link-graveyard-net
+    profiles:
+      - dev-tools
+
+volumes:
+  pgdata:
+
+networks:
+  link-graveyard-net:
+    driver: bridge

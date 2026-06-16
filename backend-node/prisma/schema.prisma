@@ -1,0 +1,74 @@
+﻿// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  preferences   Json      @default("{}")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  links         Link[]
+  reminders     ReminderSchedule[]
+
+  @@map("users")
+}
+
+model Link {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  originalUrl String    @map("original_url")
+  status      String    @default("PENDING")
+  category    String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metadata    LinkMetadata?
+  context     LinkContext?
+  reminders   ReminderSchedule[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("links")
+}
+
+model LinkMetadata {
+  linkId        String  @id @map("link_id")
+  title         String?
+  aiSummary     String? @map("ai_summary")
+  previewImage  String? @map("preview_image")
+  dynamicData   Json    @default("{}") @map("dynamic_data")
+  link          Link    @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@map("link_metadata")
+}
+
+model LinkContext {
+  id              String  @id @default(uuid())
+  linkId          String  @unique @map("link_id")
+  source          String
+  inferredAction  String? @map("inferred_action")
+  rawContext      String? @map("raw_context")
+  link            Link    @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@map("user_intents")
+}
+
+model ReminderSchedule {
+  id                String    @id @default(uuid())
+  linkId            String    @map("link_id")
+  userId            String    @map("user_id")
+  scheduledFor      DateTime  @map("scheduled_for")
+  notificationSent  Boolean   @default(false) @map("notification_sent")
+  link              Link      @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reminders_schedule")
+}
