@@ -1,0 +1,6 @@
+{
+  "name": "Link Graveyard",
+  "description": "A sovereign archive to bury bookmarks and resurrect them using server-side contextual AI summaries and inferred intents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
