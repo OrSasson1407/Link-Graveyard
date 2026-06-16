@@ -1,4 +1,4 @@
-import { Process, Processor } from '@nestjs/bull';
+﻿import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { QueueService } from './queue.service';
@@ -20,14 +20,14 @@ export class QueueProcessor {
   @Process('ingest')
   async handleIngestion(job: Job) {
     const { linkId, url, userId, contextText } = job.data;
-    this.logger.log('Processing ingestion job for linkId=' + linkId);
+    this.logger.log(`Processing ingestion job for linkId=${linkId}`);
 
     try {
       new URL(url);
       await this.queueService.addDomScrapingJob({ linkId, url, userId, contextText });
-      this.logger.log('Ingestion complete, forwarded to scraping: ' + linkId);
+      this.logger.log(`Ingestion complete, forwarded to scraping: ${linkId}`);
     } catch (err) {
-      this.logger.error('Ingestion failed for ' + linkId + ': ' + err.message);
+      this.logger.error(`Ingestion failed for ${linkId}: ${err.message}`);
       await this.prisma.link.update({ where: { id: linkId }, data: { status: 'ERROR' } });
       throw err;
     }
@@ -36,7 +36,7 @@ export class QueueProcessor {
   @Process('analyze')
   async handleAiAnalysis(job: Job) {
     const { linkId, url, userId, title, rawTextSample, contextText } = job.data;
-    this.logger.log('Processing AI analysis job for linkId=' + linkId);
+    this.logger.log(`Processing AI analysis job for linkId=${linkId}`);
 
     try {
       const result = await this.aiService.analyzeLink({
@@ -52,19 +52,32 @@ export class QueueProcessor {
           category: result.category,
           metadata: {
             upsert: {
-              create: { title: title || url, aiSummary: result.summary, dynamicData: { tags: result.dynamic_tags } },
-              update: { title: title || url, aiSummary: result.summary, dynamicData: { tags: result.dynamic_tags } },
+              create: {
+                title: title || url,
+                aiSummary: result.summary,
+                dynamicData: { tags: result.dynamic_tags },
+              },
+              update: {
+                title: title || url,
+                aiSummary: result.summary,
+                dynamicData: { tags: result.dynamic_tags },
+              },
             },
           },
-          intent: { upsert: { create: { source: 'ai', inferredAction: result.intent }, update: { inferredAction: result.intent } } },
+          intent: {
+            upsert: {
+              create: { source: 'ai', inferredAction: result.intent },
+              update: { inferredAction: result.intent },
+            },
+          },
         },
       });
 
-      this.eventsGateway.emitLinkProcessed(linkId, result);
+      this.eventsGateway.emitLinkProcessed(userId, linkId, result);
       await this.queueService.addReminderSchedulerJob({ userId });
-      this.logger.log('AI analysis complete for ' + linkId);
+      this.logger.log(`AI analysis complete for ${linkId}`);
     } catch (err) {
-      this.logger.error('AI analysis failed for ' + linkId + ': ' + err.message);
+      this.logger.error(`AI analysis failed for ${linkId}: ${err.message}`);
       throw err;
     }
   }
@@ -72,7 +85,7 @@ export class QueueProcessor {
   @Process('schedule')
   async handleReminderSchedule(job: Job) {
     const { userId } = job.data;
-    this.logger.log('Processing reminder schedule job for userId=' + userId);
+    this.logger.log(`Processing reminder schedule job for userId=${userId}`);
+    // Handled by RemindersWorker cron — this is a no-op intentionally
   }
 }
-

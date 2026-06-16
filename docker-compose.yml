@@ -1,4 +1,4 @@
-﻿services:
+services:
   api-gateway:
     build:
       context: ./backend-node
@@ -6,30 +6,47 @@
       - "3000:3000"
     environment:
       - NODE_ENV=development
+      - PORT=3000
       - DATABASE_URL=postgresql://user:pass@postgres:5432/link_graveyard
-      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-changeme}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-refresh-changeme}
+      - INTERNAL_WORKER_SECRET=${INTERNAL_WORKER_SECRET:-changeme-internal-secret}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   python-worker:
     build:
       context: ./backend-python
+    ports:
+      - "8000:8000"
     environment:
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://redis:6379/0
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NESTJS_INTERNAL_URL=http://api-gateway:3000
+      - INTERNAL_WORKER_SECRET=${INTERNAL_WORKER_SECRET:-changeme-internal-secret}
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   celery-worker:
     build:
       context: ./backend-python
-    command: celery -A app.worker.tasks worker --loglevel=info
+    command: celery -A app.worker.tasks.celery_app worker --loglevel=info --concurrency=4
     environment:
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://redis:6379/0
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NESTJS_INTERNAL_URL=http://api-gateway:3000
+      - INTERNAL_WORKER_SECRET=${INTERNAL_WORKER_SECRET:-changeme-internal-secret}
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   postgres:
     image: postgres:15-alpine
@@ -40,12 +57,23 @@
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5434:5432"
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d link_graveyard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6381:6379"
+      - "6382:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   pgdata:
+

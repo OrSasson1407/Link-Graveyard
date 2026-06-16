@@ -1,14 +1,15 @@
-﻿name: CI Pipeline
+﻿name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
-  lint-and-test-node:
-    name: Lint & Test NestJS
+  # ── NestJS Tests ─────────────────────────────────────────────────────────
+  test-node:
+    name: NestJS Lint & Test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,17 +31,46 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run unit tests
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run tests
         run: npm run test:cov
         env:
-          DATABASE_URL: postgresql://user:pass@localhost:5439/link_graveyard_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6380  
+          DATABASE_URL: postgresql://user:pass@localhost:5432/link_graveyard
           JWT_SECRET: test-secret
           JWT_REFRESH_SECRET: test-refresh-secret
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
 
-  lint-and-test-python:
-    name: Lint & Test Python Worker
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: link_graveyard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+  # ── Python Tests ─────────────────────────────────────────────────────────
+  test-python:
+    name: Python Lint & Test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -54,22 +84,37 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: backend-python/requirements.txt
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run PyTest
-        run: pytest --tb=short -v
-        env:
-          INTERNAL_WORKER_SECRET: test-secret
-          OPENAI_API_KEY: test-key
+      - name: Install Playwright browsers
+        run: playwright install chromium
 
-  build-docker:
+      - name: Run tests
+        run: pytest -v --tb=short
+        env:
+          REDIS_URL: redis://localhost:6379/0
+          NESTJS_INTERNAL_URL: http://localhost:3000
+          INTERNAL_WORKER_SECRET: test-secret
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+  # ── Build & Push Docker Images ────────────────────────────────────────────
+  build:
     name: Build Docker Images
     runs-on: ubuntu-latest
-    needs: [lint-and-test-node, lint-and-test-python]
-    if: github.ref == 'refs/heads/main'
+    needs: [test-node, test-python]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v4
@@ -77,8 +122,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build NestJS image
-        run: docker build -t link-graveyard-api:latest ./backend-node
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Python Worker image
-        run: docker build -t link-graveyard-worker:latest ./backend-python
+      - name: Build and push API Gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend-node
+          push: true
+          tags: ghcr.io/${{ github.repository }}/api-gateway:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Python Worker
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend-python
+          push: true
+          tags: ghcr.io/${{ github.repository }}/python-worker:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

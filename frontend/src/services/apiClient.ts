@@ -34,22 +34,22 @@ export const linksApi = {
     return res.data; // { data: Link[], meta: { total, page, limit } }
   },
 
-  async create(url: string, title?: string) {
+  async create(url: string, contextText?: string) {
     const res = await api.post('/api/v1/links', {
       url,
-      source: 'web',
-      context_text: title || '',
+      source: 'WEB_EXT',
+      context_text: contextText || '',
     });
-    return res.data; // { link_id, status: 'PENDING' }
+    return res.data; // { message, data: { link_id, status } }
   },
 
   async updateStatus(id: string, status: 'ACTIVE' | 'ARCHIVED' | 'DELETED') {
-    const res = await api.put(\/api/v1/links/\/status\, { status });
+    const res = await api.put(`/api/v1/links/${id}/status`, { status });
     return res.data;
   },
 
   async whyDidISaveThis(id: string) {
-    const res = await api.get(\/api/v1/links/\/why-did-i-save-this\);
+    const res = await api.get(`/api/v1/links/${id}/why-did-i-save-this`);
     return res.data; // { reconstructed_story }
   },
 };
