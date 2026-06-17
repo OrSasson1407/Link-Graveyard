@@ -1,5 +1,5 @@
-﻿import { Module } from '@nestjs/common';
-import { AffiliateService } from './affiliate.service';
+﻿import { Module } from "@nestjs/common";
+import { AffiliateService } from "./affiliate.service";
 
 @Module({
   providers: [AffiliateService],

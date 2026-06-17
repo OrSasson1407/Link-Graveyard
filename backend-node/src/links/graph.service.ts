@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
 
 @Injectable()
 export class GraphService {
@@ -8,7 +8,7 @@ export class GraphService {
   constructor(private readonly prisma: PrismaService) {}
 
   async buildKnowledgeGraph(userId: string) {
-    this.logger.log('Building knowledge graph for userId=' + userId);
+    this.logger.log("Building knowledge graph for userId=" + userId);
 
     const links = await this.prisma.link.findMany({
       where: { userId },
@@ -30,7 +30,11 @@ export class GraphService {
         const b = links[j];
         let weight = 0;
         if (a.category && a.category === b.category) weight += 2;
-        if (a.intent?.inferredAction && a.intent.inferredAction === b.intent?.inferredAction) weight += 1;
+        if (
+          a.intent?.inferredAction &&
+          a.intent.inferredAction === b.intent?.inferredAction
+        )
+          weight += 1;
         if (weight > 0) edges.push({ source: a.id, target: b.id, weight });
       }
     }
@@ -38,4 +42,3 @@ export class GraphService {
     return { nodes, edges };
   }
 }
-

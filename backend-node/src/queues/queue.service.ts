@@ -1,17 +1,17 @@
-﻿import { Injectable } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+﻿import { Injectable } from "@nestjs/common";
+import { InjectQueue } from "@nestjs/bull";
+import { Queue } from "bull";
 
 @Injectable()
 export class QueueService {
   constructor(
-    @InjectQueue('link-ingestion-queue')
+    @InjectQueue("link-ingestion-queue")
     private readonly linkIngestionQueue: Queue,
-    @InjectQueue('dom-scraping-queue')
+    @InjectQueue("dom-scraping-queue")
     private readonly domScrapingQueue: Queue,
-    @InjectQueue('ai-analysis-queue')
+    @InjectQueue("ai-analysis-queue")
     private readonly aiAnalysisQueue: Queue,
-    @InjectQueue('reminder-scheduler-queue')
+    @InjectQueue("reminder-scheduler-queue")
     private readonly reminderSchedulerQueue: Queue,
   ) {}
 
@@ -21,9 +21,9 @@ export class QueueService {
     userId: string;
     contextText?: string;
   }) {
-    return this.linkIngestionQueue.add('ingest', data, {
+    return this.linkIngestionQueue.add("ingest", data, {
       attempts: 3,
-      backoff: { type: 'exponential', delay: 2000 },
+      backoff: { type: "exponential", delay: 2000 },
     });
   }
 
@@ -33,9 +33,9 @@ export class QueueService {
     userId: string;
     contextText?: string;
   }) {
-    return this.domScrapingQueue.add('scrape', data, {
+    return this.domScrapingQueue.add("scrape", data, {
       attempts: 3,
-      backoff: { type: 'exponential', delay: 3000 },
+      backoff: { type: "exponential", delay: 3000 },
     });
   }
 
@@ -47,16 +47,16 @@ export class QueueService {
     rawTextSample?: string;
     contextText?: string;
   }) {
-    return this.aiAnalysisQueue.add('analyze', data, {
+    return this.aiAnalysisQueue.add("analyze", data, {
       attempts: 5,
-      backoff: { type: 'exponential', delay: 5000 },
+      backoff: { type: "exponential", delay: 5000 },
     });
   }
 
   async addReminderSchedulerJob(data: { userId: string }) {
-    return this.reminderSchedulerQueue.add('schedule', data, {
+    return this.reminderSchedulerQueue.add("schedule", data, {
       attempts: 3,
-      backoff: { type: 'exponential', delay: 2000 },
+      backoff: { type: "exponential", delay: 2000 },
     });
   }
 }

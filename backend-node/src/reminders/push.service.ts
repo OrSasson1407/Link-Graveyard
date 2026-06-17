@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from "@nestjs/common";
 
 @Injectable()
 export class PushService {
@@ -6,6 +6,8 @@ export class PushService {
 
   async sendPush(reminderId: string, userId: string, title: string) {
     // TODO: integrate APNs / FCM
-    this.logger.log(`[PUSH] reminderId=${reminderId} userId=${userId} title="${title}"`);
+    this.logger.log(
+      `[PUSH] reminderId=${reminderId} userId=${userId} title="${title}"`,
+    );
   }
 }

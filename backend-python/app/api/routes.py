@@ -1,8 +1,11 @@
-﻿import logging
+import logging
 from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel, HttpUrl
 from typing import Optional
 from app.core.config import settings
+from celery.result import AsyncResult
+from celery.result import AsyncResult
+from celery.result import AsyncResult
 from app.worker.tasks import process_link_task
 from app.worker.scraper import extract_dom_context
 
@@ -87,3 +90,5 @@ async def scrape_sync(body: ScrapeRequest):
     logger.info(f"Synchronous scrape for url={body.url}")
     result = await extract_dom_context(str(body.url))
     return result
+
+

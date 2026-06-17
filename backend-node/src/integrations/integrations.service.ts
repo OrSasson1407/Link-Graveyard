@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from "@nestjs/common";
 
 @Injectable()
 export class IntegrationsService {
@@ -11,14 +11,22 @@ export class IntegrationsService {
     const owner = match[1];
     const repo = match[2];
     const prNumber = match[3];
-    this.logger.log('Fetching GitHub PR status: ' + owner + '/' + repo + '#' + prNumber);
+    this.logger.log(
+      "Fetching GitHub PR status: " + owner + "/" + repo + "#" + prNumber,
+    );
 
     try {
-      const apiUrl = 'https://api.github.com/repos/' + owner + '/' + repo + '/pulls/' + prNumber;
+      const apiUrl =
+        "https://api.github.com/repos/" +
+        owner +
+        "/" +
+        repo +
+        "/pulls/" +
+        prNumber;
       const response = await fetch(apiUrl, {
         headers: {
-          Authorization: 'Bearer ' + process.env.GITHUB_TOKEN,
-          Accept: 'application/vnd.github+json',
+          Authorization: "Bearer " + process.env.GITHUB_TOKEN,
+          Accept: "application/vnd.github+json",
         },
       });
 
@@ -32,13 +40,13 @@ export class IntegrationsService {
         merged: data.merged,
       };
     } catch (err) {
-      this.logger.error('GitHub fetch failed: ' + err.message);
+      this.logger.error("GitHub fetch failed: " + err.message);
       return {};
     }
   }
 
   async fetchProductPrice(url: string): Promise<Record<string, any>> {
-    this.logger.log('Fetching product price for: ' + url);
+    this.logger.log("Fetching product price for: " + url);
     return { price_available: false };
   }
 }

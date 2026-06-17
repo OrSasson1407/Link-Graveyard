@@ -1,6 +1,6 @@
-﻿import { Module } from '@nestjs/common';
-import { AiService } from './ai.service';
-import { AudioService } from './audio.service';
+﻿import { Module } from "@nestjs/common";
+import { AiService } from "./ai.service";
+import { AudioService } from "./audio.service";
 
 @Module({
   providers: [AiService, AudioService],

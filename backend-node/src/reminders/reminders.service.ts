@@ -1,6 +1,6 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { CspSolver } from './csp.solver';
+﻿import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { CspSolver } from "./csp.solver";
 
 @Injectable()
 export class RemindersService {
@@ -33,7 +33,9 @@ export class RemindersService {
       }
     }
 
-    this.logger.log(`Scheduled ${scheduled.length} reminders for userId=${userId}`);
+    this.logger.log(
+      `Scheduled ${scheduled.length} reminders for userId=${userId}`,
+    );
     return scheduled;
   }
 }

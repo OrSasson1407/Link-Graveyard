@@ -1,7 +1,14 @@
-﻿import { Controller, Post, Body, Headers, UnauthorizedException, Logger } from '@nestjs/common';
-import { LinksService } from '../links/links.service';
-import { QueueService } from '../queues/queue.service';
-import { AiService } from '../ai/ai.service';
+﻿import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  UnauthorizedException,
+  Logger,
+} from "@nestjs/common";
+import { LinksService } from "../links/links.service";
+import { QueueService } from "../queues/queue.service";
+import { AiService } from "../ai/ai.service";
 
 class ProcessedCallbackDto {
   link_id: string;
@@ -13,7 +20,7 @@ class ProcessedCallbackDto {
   success: boolean;
 }
 
-@Controller('internal')
+@Controller("internal")
 export class InternalController {
   private readonly logger = new Logger(InternalController.name);
 
@@ -23,26 +30,28 @@ export class InternalController {
     private readonly aiService: AiService,
   ) {}
 
-  @Post('links/processed')
+  @Post("links/processed")
   async handleProcessedCallback(
     @Body() dto: ProcessedCallbackDto,
-    @Headers('x-internal-secret') secret: string,
+    @Headers("x-internal-secret") secret: string,
   ) {
     if (secret !== process.env.INTERNAL_WORKER_SECRET) {
-      throw new UnauthorizedException('Invalid internal secret');
+      throw new UnauthorizedException("Invalid internal secret");
     }
 
-    this.logger.log(`Received callback for linkId=${dto.link_id}, success=${dto.success}`);
+    this.logger.log(
+      `Received callback for linkId=${dto.link_id}, success=${dto.success}`,
+    );
 
     if (!dto.success) {
-      await this.linksService.updateStatus(dto.link_id, dto.user_id, 'ERROR');
+      await this.linksService.updateStatus(dto.link_id, dto.user_id, "ERROR");
       return { ok: false };
     }
 
     const aiResult = await this.aiService.analyzeLink({
-      url: '',
-      rawTextSample: dto.raw_text_sample ?? '',
-      contextText: dto.context_text ?? '',
+      url: "",
+      rawTextSample: dto.raw_text_sample ?? "",
+      contextText: dto.context_text ?? "",
     });
 
     await this.linksService.markAsProcessed(dto.link_id, {

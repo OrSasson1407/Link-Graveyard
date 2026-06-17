@@ -1,7 +1,12 @@
-﻿import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { QueueService } from '../queues/queue.service';
-import { EventsGateway } from '../events/events.gateway';
+﻿import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+} from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { QueueService } from "../queues/queue.service";
+import { EventsGateway } from "../events/events.gateway";
 
 @Injectable()
 export class LinksService {
@@ -13,14 +18,17 @@ export class LinksService {
     private eventsGateway: EventsGateway,
   ) {}
 
-  async create(userId: string, dto: { url: string; source: string; context_text?: string }) {
+  async create(
+    userId: string,
+    dto: { url: string; source: string; context_text?: string },
+  ) {
     this.logger.log(`Creating link for user ${userId}`);
 
     const link = await this.prisma.link.create({
       data: {
         userId,
         originalUrl: dto.url,
-        status: 'PENDING',
+        status: "PENDING",
         intent: {
           create: {
             source: dto.source,
@@ -37,17 +45,28 @@ export class LinksService {
       contextText: dto.context_text,
     });
 
-    return { message: 'Link queued for processing', data: { link_id: link.id, status: 'PENDING' } };
+    return {
+      message: "Link queued for processing",
+      data: { link_id: link.id, status: "PENDING" },
+    };
   }
 
-  async findAll(userId: string, query: { status?: string; page?: number; limit?: number; category?: string }) {
+  async findAll(
+    userId: string,
+    query: {
+      status?: string;
+      page?: number;
+      limit?: number;
+      category?: string;
+    },
+  ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
     const where: any = { userId };
     if (query.status) where.status = query.status;
-    else where.status = 'ACTIVE';
+    else where.status = "ACTIVE";
     if (query.category) where.category = query.category;
 
     const [links, total] = await this.prisma.$transaction([
@@ -56,7 +75,7 @@ export class LinksService {
         skip,
         take: limit,
         include: { metadata: true, intent: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.link.count({ where }),
     ]);
@@ -85,8 +104,8 @@ export class LinksService {
 
   async updateStatus(id: string, userId: string, status: string) {
     const link = await this.prisma.link.findUnique({ where: { id } });
-    if (!link) throw new NotFoundException('Link not found');
-    if (link.userId !== userId) throw new ForbiddenException('Access denied');
+    if (!link) throw new NotFoundException("Link not found");
+    if (link.userId !== userId) throw new ForbiddenException("Access denied");
 
     const updated = await this.prisma.link.update({
       where: { id },
@@ -101,33 +120,43 @@ export class LinksService {
       where: { id },
       include: { intent: true, metadata: true },
     });
-    if (!link) throw new NotFoundException('Link not found');
-    if (link.userId !== userId) throw new ForbiddenException('Access denied');
+    if (!link) throw new NotFoundException("Link not found");
+    if (link.userId !== userId) throw new ForbiddenException("Access denied");
 
-    const savedAt = link.createdAt.toLocaleDateString('en-US', { weekday: 'long', hour: '2-digit', minute: '2-digit' });
-    const source = link.intent?.source ?? 'unknown source';
-    const context = link.intent?.rawContext ? `The surrounding text was "${link.intent.rawContext}".` : '';
+    const savedAt = link.createdAt.toLocaleDateString("en-US", {
+      weekday: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const source = link.intent?.source ?? "unknown source";
+    const context = link.intent?.rawContext
+      ? `The surrounding text was "${link.intent.rawContext}".`
+      : "";
     const title = link.metadata?.title ?? link.originalUrl;
 
-    const reconstructed_story = `You saved "${title}" on ${savedAt} from ${source}. ${context}`.trim();
+    const reconstructed_story =
+      `You saved "${title}" on ${savedAt} from ${source}. ${context}`.trim();
 
     return { reconstructed_story };
   }
 
-  async markAsProcessed(linkId: string, data: {
-    title?: string;
-    aiSummary?: string;
-    previewImage?: string;
-    dynamicData?: any;
-    category?: string;
-    inferredAction?: string;
-  }) {
+  async markAsProcessed(
+    linkId: string,
+    data: {
+      title?: string;
+      aiSummary?: string;
+      previewImage?: string;
+      dynamicData?: any;
+      category?: string;
+      inferredAction?: string;
+    },
+  ) {
     this.logger.log(`Marking link ${linkId} as processed`);
 
     const updated = await this.prisma.link.update({
       where: { id: linkId },
       data: {
-        status: 'ACTIVE',
+        status: "ACTIVE",
         category: data.category ?? null,
         metadata: {
           upsert: {

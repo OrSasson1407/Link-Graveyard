@@ -1,16 +1,16 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+﻿import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
 
 interface TimeSlot {
-  label: 'MORNING' | 'NOON' | 'EVENING' | 'WEEKEND';
+  label: "MORNING" | "NOON" | "EVENING" | "WEEKEND";
   hour: number;
 }
 
 const TIME_SLOTS: TimeSlot[] = [
-  { label: 'MORNING', hour: 8 },
-  { label: 'NOON', hour: 12 },
-  { label: 'EVENING', hour: 19 },
-  { label: 'WEEKEND', hour: 10 },
+  { label: "MORNING", hour: 8 },
+  { label: "NOON", hour: 12 },
+  { label: "EVENING", hour: 19 },
+  { label: "WEEKEND", hour: 10 },
 ];
 
 @Injectable()
@@ -19,17 +19,19 @@ export class CspSolver {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async solveForUser(userId: string): Promise<{ linkId: string; scheduledFor: Date }[]> {
+  async solveForUser(
+    userId: string,
+  ): Promise<{ linkId: string; scheduledFor: Date }[]> {
     const links = await this.prisma.link.findMany({
-      where: { userId, status: 'ACTIVE' },
+      where: { userId, status: "ACTIVE" },
       include: { intent: true },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
     });
 
     if (!links.length) return [];
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    const tzOffset = parseInt(user?.tzOffset ?? '0', 10);
+    const tzOffset = parseInt(user?.tzOffset ?? "0", 10);
 
     // Hard constraint: max 2 notifications per day
     const MAX_PER_DAY = 2;
@@ -40,12 +42,17 @@ export class CspSolver {
       // Score each slot via soft constraints
       const scored = TIME_SLOTS.map((slot) => {
         let score = 0;
-        const isWeekend = slot.label === 'WEEKEND';
+        const isWeekend = slot.label === "WEEKEND";
 
-        if (link.category === 'VIDEO' && isWeekend) score += 10;
-        if (link.category === 'DEV' && link.intent?.inferredAction === 'CODE_REVIEW' && slot.label === 'MORNING') score += 15;
-        if (link.category === 'ARTICLE' && slot.label === 'EVENING') score += 5;
-        if (link.category === 'PRODUCT' && slot.label === 'NOON') score += 5;
+        if (link.category === "VIDEO" && isWeekend) score += 10;
+        if (
+          link.category === "DEV" &&
+          link.intent?.inferredAction === "CODE_REVIEW" &&
+          slot.label === "MORNING"
+        )
+          score += 15;
+        if (link.category === "ARTICLE" && slot.label === "EVENING") score += 5;
+        if (link.category === "PRODUCT" && slot.label === "NOON") score += 5;
 
         return { slot, score };
       }).sort((a, b) => b.score - a.score);
@@ -70,7 +77,9 @@ export class CspSolver {
       }
 
       if (!scheduled) {
-        this.logger.warn(`Could not schedule link ${link.id} — daily limit reached for all slots`);
+        this.logger.warn(
+          `Could not schedule link ${link.id} — daily limit reached for all slots`,
+        );
       }
     }
 
@@ -81,7 +90,7 @@ export class CspSolver {
     const now = new Date();
     const target = new Date(now);
 
-    if (slot.label === 'WEEKEND') {
+    if (slot.label === "WEEKEND") {
       const day = now.getDay();
       const daysUntilSat = day === 6 ? 7 : 6 - day;
       target.setDate(now.getDate() + daysUntilSat);

@@ -1,12 +1,12 @@
-﻿import { Process, Processor } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
-import { Job } from 'bull';
-import { QueueService } from './queue.service';
-import { AiService } from '../ai/ai.service';
-import { PrismaService } from '../prisma.service';
-import { EventsGateway } from '../events/events.gateway';
+﻿import { Process, Processor } from "@nestjs/bull";
+import { Logger } from "@nestjs/common";
+import { Job } from "bull";
+import { QueueService } from "./queue.service";
+import { AiService } from "../ai/ai.service";
+import { PrismaService } from "../prisma.service";
+import { EventsGateway } from "../events/events.gateway";
 
-@Processor('link-ingestion-queue')
+@Processor("link-ingestion-queue")
 export class QueueProcessor {
   private readonly logger = new Logger(QueueProcessor.name);
 
@@ -17,23 +17,31 @@ export class QueueProcessor {
     private readonly eventsGateway: EventsGateway,
   ) {}
 
-  @Process('ingest')
+  @Process("ingest")
   async handleIngestion(job: Job) {
     const { linkId, url, userId, contextText } = job.data;
     this.logger.log(`Processing ingestion job for linkId=${linkId}`);
 
     try {
       new URL(url);
-      await this.queueService.addDomScrapingJob({ linkId, url, userId, contextText });
+      await this.queueService.addDomScrapingJob({
+        linkId,
+        url,
+        userId,
+        contextText,
+      });
       this.logger.log(`Ingestion complete, forwarded to scraping: ${linkId}`);
     } catch (err) {
       this.logger.error(`Ingestion failed for ${linkId}: ${err.message}`);
-      await this.prisma.link.update({ where: { id: linkId }, data: { status: 'ERROR' } });
+      await this.prisma.link.update({
+        where: { id: linkId },
+        data: { status: "ERROR" },
+      });
       throw err;
     }
   }
 
-  @Process('analyze')
+  @Process("analyze")
   async handleAiAnalysis(job: Job) {
     const { linkId, url, userId, title, rawTextSample, contextText } = job.data;
     this.logger.log(`Processing AI analysis job for linkId=${linkId}`);
@@ -41,14 +49,14 @@ export class QueueProcessor {
     try {
       const result = await this.aiService.analyzeLink({
         url,
-        rawTextSample: rawTextSample || '',
-        contextText: contextText || '',
+        rawTextSample: rawTextSample || "",
+        contextText: contextText || "",
       });
 
       await this.prisma.link.update({
         where: { id: linkId },
         data: {
-          status: 'ACTIVE',
+          status: "ACTIVE",
           category: result.category,
           metadata: {
             upsert: {
@@ -66,7 +74,7 @@ export class QueueProcessor {
           },
           intent: {
             upsert: {
-              create: { source: 'ai', inferredAction: result.intent },
+              create: { source: "ai", inferredAction: result.intent },
               update: { inferredAction: result.intent },
             },
           },
@@ -82,7 +90,7 @@ export class QueueProcessor {
     }
   }
 
-  @Process('schedule')
+  @Process("schedule")
   async handleReminderSchedule(job: Job) {
     const { userId } = job.data;
     this.logger.log(`Processing reminder schedule job for userId=${userId}`);

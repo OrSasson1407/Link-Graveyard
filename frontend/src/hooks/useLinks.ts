@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { linksApi } from '../services/apiClient';
 
 export const useLinks = (params?: { status?: string; page?: number; limit?: number; category?: string }) => {
@@ -7,11 +7,15 @@ export const useLinks = (params?: { status?: string; page?: number; limit?: numb
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Use a ref to keep track of the stringified params to prevent infinite loops
+  const paramsRef = useRef(JSON.stringify(params));
+
   const fetchLinks = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await linksApi.getAll(params);
+      const currentParams = paramsRef.current ? JSON.parse(paramsRef.current) : undefined;
+      const response = await linksApi.getAll(currentParams);
       setLinks(response.data || []);
       setMeta(response.meta || null);
     } catch (err: any) {
@@ -19,8 +23,18 @@ export const useLinks = (params?: { status?: string; page?: number; limit?: numb
     } finally {
       setLoading(false);
     }
-  }, [JSON.stringify(params)]);
+  }, []); // Empty dependency array prevents re-creation
 
+  useEffect(() => {
+    // Only fetch if the actual values inside the params have changed
+    const newParamsString = JSON.stringify(params);
+    if(paramsRef.current !== newParamsString) {
+        paramsRef.current = newParamsString;
+        fetchLinks();
+    }
+  }, [params, fetchLinks]);
+
+  // Initial fetch
   useEffect(() => {
     fetchLinks();
   }, [fetchLinks]);
