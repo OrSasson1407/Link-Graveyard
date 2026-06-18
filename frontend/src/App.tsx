@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Skull, Plus, Loader2, CheckCircle, AlertCircle, Sparkles, Link2, X, Eye, EyeOff
 } from "lucide-react";
@@ -23,18 +23,37 @@ const isValidUrl = (urlStr: string): boolean => {
 };
 
 function mapLink(link: any): Bookmark {
+  const dynData = link.metadata?.dynamic_data ?? {};
   return {
     id: link.id || link.link_id,
-    title: link.title || link.metadata?.title || link.url,
+    title: link.metadata?.title || link.title || link.url,
     url: link.url,
-    summary: link.metadata?.aiSummary || link.aiSummary || "",
-    intent: link.intent?.reconstructedStory || "",
-    tags: link.metadata?.category ? [link.metadata.category] : [],
+    summary: link.metadata?.ai_summary || link.metadata?.aiSummary || "",
+    intent: link.intent?.inferred_action || link.intent?.reconstructedStory || "",
+    tags: dynData.tags ?? (link.metadata?.category ? [link.metadata.category] : []),
     addedAt: link.createdAt || link.created_at || new Date().toISOString(),
     status: link.status === "ARCHIVED" ? "ARCHIVED" : link.status === "PENDING" ? "PROCESSING" : "REVIVED",
     domain: (() => { try { return new URL(link.url).hostname.replace("www.", ""); } catch { return ""; } })(),
-    readingTime: undefined,
+    readingTime: dynData.readingTimeMinutes ? `${dynData.readingTimeMinutes} min` : undefined,
     isRead: link.status === "ARCHIVED",
+    confidence: dynData.confidence,
+  };
+}
+
+// Optimistic placeholder
+function makeOptimisticBookmark(url: string): Bookmark {
+  return {
+    id: `optimistic-${Date.now()}`,
+    title: url,
+    url,
+    summary: "",
+    intent: "",
+    tags: [],
+    addedAt: new Date().toISOString(),
+    status: "PROCESSING",
+    domain: (() => { try { return new URL(url).hostname.replace("www.", ""); } catch { return ""; } })(),
+    readingTime: undefined,
+    isRead: false,
   };
 }
 
@@ -90,7 +109,7 @@ function AuthScreen({ onSuccess }: { onSuccess: () => void }) {
             <div className="relative">
               <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)}
                 className="glass-input w-full h-10 pl-4 pr-10 rounded-xl text-xs text-gray-300 focus:outline-none focus:border-indigo-500"
-                placeholder="••••••••" />
+                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
               <button type="button" onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 cursor-pointer">
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -125,10 +144,42 @@ export default function App() {
   const [newUrl, setNewUrl] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [globalNotification, setGlobalNotification] = useState("");
+  const [optimisticLinks, setOptimisticLinks] = useState<Bookmark[]>([]);
 
   const { links, loading: linksLoading, refetch } = useLinks();
   const { createLink, loading: createLoading } = useCreateLink();
-  const bookmarks: Bookmark[] = links.map(mapLink);
+
+  const serverBookmarks: Bookmark[] = links.map(mapLink);
+  const bookmarks: Bookmark[] = [
+    ...optimisticLinks.filter((o) => !serverBookmarks.some((s) => s.url === o.url)),
+    ...serverBookmarks,
+  ];
+
+  // Step 15: Keyboard shortcuts
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+    // Cmd/Ctrl+K -> open add-link modal
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      e.preventDefault();
+      setIsNewEntryModalOpen(true);
+    }
+    // / -> focus global search
+    if (e.key === "/" && !isNewEntryModalOpen) {
+      e.preventDefault();
+      (document.getElementById("global-search-input") as HTMLInputElement)?.focus();
+    }
+    // Escape -> close modal
+    if (e.key === "Escape") {
+      setIsNewEntryModalOpen(false);
+    }
+  }, [isNewEntryModalOpen]);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -146,12 +197,22 @@ export default function App() {
   const handleCreateNewBookmark = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUrl.trim()) return;
+
+    // Step 14: Optimistic UI
+    const optimistic = makeOptimisticBookmark(newUrl);
+    setOptimisticLinks((prev) => [optimistic, ...prev]);
+    setNewUrl(""); setNewTitle(""); setIsNewEntryModalOpen(false);
+    notify("Link submitted â€” AI will summarize shortly.");
+
     try {
       await createLink(newUrl, newTitle || undefined);
-      setNewUrl(""); setNewTitle(""); setIsNewEntryModalOpen(false);
-      notify("Link submitted — AI will summarize shortly.");
-      refetch();
-    } catch { notify("Failed to save link. Is the backend running?"); }
+      await refetch();
+    } catch {
+      setOptimisticLinks((prev) => prev.filter((o) => o.id !== optimistic.id));
+      notify("Failed to save link. Is the backend running?");
+    } finally {
+      setOptimisticLinks((prev) => prev.filter((o) => o.id !== optimistic.id));
+    }
   };
 
   const handleUpdateBookmarkStatus = async (id: string, updates: Partial<Bookmark>) => {
@@ -166,7 +227,7 @@ export default function App() {
     if (!confirm("Permanently delete this link?")) return;
     if (selectedBookmark?.id === id) setSelectedBookmark(null);
     try {
-      await fetch(`/api/v1/links/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` } });
+      await linksApi.softDelete(id);
       notify("Link deleted."); refetch();
     } catch { notify("Failed to delete link."); }
   };
@@ -195,7 +256,6 @@ export default function App() {
 
   if (!authed) return <AuthScreen onSuccess={() => setAuthed(true)} />;
 
-  const isLandingView = activeTab === "landing";
   const isLightTheme = appearance.theme === "light";
   const bgClass = isLightTheme ? "frosted-bg-light" : "frosted-bg";
 
@@ -216,93 +276,58 @@ export default function App() {
           onUpdateProfile={(u) => setProfile((p) => ({ ...p, ...u }))}
           onUpdateAppearance={(u) => setAppearance((a) => ({ ...a, ...u }))} />;
       case "billing":
-        return <BillingView billingHistory={[]} appearance={appearance} bookmarksCount={bookmarks.length} />;
+        return <BillingView appearance={appearance} />;
       case "landing":
       default:
-        return <LandingView bookmarksCount={bookmarks.length} onEnterApp={() => setActiveTab("dashboard")} appearance={appearance} />;
+        return <LandingView onGetStarted={() => setActiveTab("dashboard")} />;
     }
   };
 
   return (
-    <div className={`min-h-screen ${bgClass} flex flex-col md:flex-row transition-colors text-sans antialiased relative overflow-hidden`}>
-      <div className={`bg-blob ${isLightTheme ? "blob-1-light" : "blob-1"}`} />
-      <div className={`bg-blob ${isLightTheme ? "blob-2-light" : "blob-2"}`} />
+    <div className={`flex min-h-screen ${bgClass} relative overflow-hidden`}>
+      <div className="bg-blob blob-1" />
+      <div className="bg-blob blob-2" />
+      {activeTab !== "landing" && (
+        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} appearance={appearance}
+          onOpenNewEntry={() => setIsNewEntryModalOpen(true)} onLogout={() => { logout(); setAuthed(false); }} />
+      )}
+      <main className="flex-1 relative z-10">{renderViewContent()}</main>
 
-      {globalNotification && (
-        <div className={`fixed top-20 right-8 z-[100] max-w-sm p-4 rounded-xl shadow-2xl text-xs flex items-start gap-3 animate-fadeIn ${isLightTheme ? "glass-panel-light border-indigo-200 text-indigo-950" : "glass-panel border-indigo-500/20 text-indigo-200"}`}>
-          <Sparkles className="w-5 h-5 text-indigo-500 mt-0.5 animate-pulse flex-shrink-0" />
-          <div>
-            <h5 className={`font-semibold ${isLightTheme ? "text-indigo-950" : "text-white"}`}>System Signal</h5>
-            <p className="mt-0.5 leading-relaxed">{globalNotification}</p>
+      {/* Add Link Modal */}
+      {isNewEntryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-panel rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+            <button onClick={() => setIsNewEntryModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2 mb-5">
+              <Link2 className="w-5 h-5 text-indigo-400" />
+              <h2 className="text-sm font-semibold text-white">Bury a Link</h2>
+              <span className="ml-auto text-[10px] font-mono text-gray-600">âŒ˜K</span>
+            </div>
+            <form onSubmit={handleCreateNewBookmark} className="space-y-3">
+              <input type="url" required value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
+                className="glass-input w-full h-10 px-4 rounded-xl text-xs text-gray-300 focus:outline-none focus:border-indigo-500"
+                placeholder="https://..." autoFocus />
+              <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+                className="glass-input w-full h-10 px-4 rounded-xl text-xs text-gray-400 focus:outline-none focus:border-indigo-500"
+                placeholder="Context (optional)" />
+              <button type="submit" disabled={createLoading || !newUrl.trim()}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer">
+                {createLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                Bury It
+              </button>
+            </form>
           </div>
         </div>
       )}
 
-      {!isLandingView && (
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onOpenNewEntryModal={() => setIsNewEntryModalOpen(true)}
-          profile={profile} appearance={appearance} linksCount={bookmarks.length} />
-      )}
-
-      <main className="flex-1 flex flex-col min-w-0 max-h-screen overflow-hidden relative z-10">
-        {linksLoading && authed && activeTab !== "landing"
-          ? <div className="flex-1 flex items-center justify-center"><Loader2 className="w-6 h-6 text-indigo-500 animate-spin" /></div>
-          : renderViewContent()}
-      </main>
-
-      {isNewEntryModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-md z-50 flex items-center justify-center animate-fadeIn">
-          <div className={`w-[460px] ${isLightTheme ? "glass-panel-light" : "glass-panel"} rounded-2xl p-6 shadow-2xl relative`}>
-            <button onClick={() => setIsNewEntryModalOpen(false)}
-              className={`absolute top-4 right-4 p-1 rounded-lg transition-colors cursor-pointer ${isLightTheme ? "text-gray-400 hover:text-gray-800 hover:bg-black/5" : "text-gray-500 hover:text-white hover:bg-white/5"}`}>
-              <X className="w-4 h-4" />
-            </button>
-            <div className={`flex items-center gap-3 mb-5 border-b pb-4 ${isLightTheme ? "border-black/5" : "border-white/5"}`}>
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500">
-                <Link2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className={`text-sm font-headline font-semibold uppercase tracking-wider ${isLightTheme ? "text-gray-900" : "text-gray-100"}`}>Bury New Entity</h3>
-                <span className="text-[10px] font-mono block text-gray-400">AI summarized on save</span>
-              </div>
-            </div>
-            <form onSubmit={handleCreateNewBookmark} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-mono tracking-widest uppercase text-gray-500 block">Source URL</label>
-                <div className="relative flex items-center">
-                  <input type="text" required disabled={createLoading} value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
-                    className={`w-full h-10 pl-4 pr-10 rounded-xl border focus:outline-none text-xs transition-colors ${newUrl.trim() === "" ? isLightTheme ? "glass-input-light text-gray-800 focus:border-indigo-500" : "glass-input text-gray-300 focus:border-indigo-500" : isValidUrl(newUrl) ? "border-emerald-500 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5" : "border-rose-500 text-rose-700 dark:text-rose-300 bg-rose-500/5"}`}
-                    placeholder="https://example.com/article" />
-                  {newUrl.trim() !== "" && (
-                    <span className="absolute right-3">
-                      {isValidUrl(newUrl) ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <AlertCircle className="w-4 h-4 text-rose-500" />}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-mono tracking-widest uppercase text-gray-500 block">Optional Title</label>
-                <input type="text" disabled={createLoading} value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
-                  className={`w-full h-10 px-4 rounded-xl border focus:outline-none text-xs transition-colors ${isLightTheme ? "glass-input-light text-gray-800 focus:border-indigo-500" : "glass-input text-gray-300 focus:border-indigo-500"}`}
-                  placeholder="Leave empty for AI auto-extraction" />
-              </div>
-              {createLoading && (
-                <div className="p-3.5 bg-indigo-500/5 border border-indigo-500/15 rounded-xl text-xs text-indigo-300 flex items-center gap-2.5 animate-pulse">
-                  <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                  <span>Submitting to backend...</span>
-                </div>
-              )}
-              <div className={`pt-4 border-t flex justify-end gap-3 ${isLightTheme ? "border-black/5" : "border-white/5"}`}>
-                <button type="button" disabled={createLoading} onClick={() => setIsNewEntryModalOpen(false)}
-                  className={`px-4 py-2 bg-transparent rounded-xl text-xs font-semibold cursor-pointer transition-colors ${isLightTheme ? "text-gray-500 hover:text-gray-900 hover:bg-black/5" : "text-gray-400 hover:text-white hover:bg-white/5"}`}>
-                  Cancel
-                </button>
-                <button type="submit" disabled={createLoading || !newUrl.trim() || !isValidUrl(newUrl)}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:pointer-events-none">
-                  Save Link
-                </button>
-              </div>
-            </form>
-          </div>
+      {/* Global notification */}
+      {globalNotification && (
+        <div className="fixed bottom-6 right-6 z-50 glass-panel px-4 py-3 rounded-xl text-xs text-white flex items-center gap-2 shadow-xl">
+          <CheckCircle className="w-4 h-4 text-emerald-400" />
+          {globalNotification}
         </div>
       )}
     </div>

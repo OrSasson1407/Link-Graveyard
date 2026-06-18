@@ -1,8 +1,9 @@
-﻿import { Module } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { BullModule } from "@nestjs/bull";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { QueueService } from "./queue.service";
 import { QueueProcessor } from "./queue.processor";
+import { DlqProcessor } from "./dlq.processor";
 import { PrismaService } from "../prisma.service";
 import { EventsModule } from "../events/events.module";
 import { AiModule } from "../ai/ai.module";
@@ -24,11 +25,12 @@ import { AiModule } from "../ai/ai.module";
       { name: "dom-scraping-queue" },
       { name: "ai-analysis-queue" },
       { name: "reminder-scheduler-queue" },
+      { name: "link-dlq" },
     ),
     EventsModule,
     AiModule,
   ],
-  providers: [QueueService, QueueProcessor, PrismaService],
+  providers: [QueueService, QueueProcessor, DlqProcessor, PrismaService],
   exports: [QueueService, BullModule],
 })
 export class QueueModule {}

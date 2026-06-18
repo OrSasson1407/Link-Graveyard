@@ -1,4 +1,4 @@
-﻿name: CI/CD Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,34 +7,27 @@ on:
     branches: [main]
 
 jobs:
-  # ── NestJS Tests ─────────────────────────────────────────────────────────
   test-node:
     name: NestJS Lint & Test
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend-node
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: npm
           cache-dependency-path: backend-node/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
       - name: Lint
         run: npm run lint
-
       - name: Generate Prisma client
         run: npx prisma generate
-
-      - name: Run tests
+      - name: Run unit tests
         run: npm run test:cov
         env:
           DATABASE_URL: postgresql://user:pass@localhost:5432/link_graveyard
@@ -42,7 +35,6 @@ jobs:
           JWT_REFRESH_SECRET: test-refresh-secret
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-
     services:
       postgres:
         image: postgres:15-alpine
@@ -50,85 +42,118 @@ jobs:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: pass
           POSTGRES_DB: link_graveyard
-        ports:
-          - 5432:5432
+        ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
       redis:
         image: redis:7-alpine
-        ports:
-          - 6379:6379
+        ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
-  # ── Python Tests ─────────────────────────────────────────────────────────
-  test-python:
-    name: Python Lint & Test
+  test-python-unit:
+    name: Python Unit Tests
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend-python
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
-
+          python-version: "3.11"
+          cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Install Playwright browsers
         run: playwright install chromium
-
-      - name: Run tests
-        run: pytest -v --tb=short
+      - name: Run unit tests
+        run: pytest -v --tb=short -k "not e2e"
         env:
           REDIS_URL: redis://localhost:6379/0
           NESTJS_INTERNAL_URL: http://localhost:3000
           INTERNAL_WORKER_SECRET: test-secret
-
     services:
       redis:
         image: redis:7-alpine
-        ports:
-          - 6379:6379
+        ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
-  # ── Build & Push Docker Images ────────────────────────────────────────────
+  test-python-e2e:
+    name: Python E2E Pipeline Tests
+    runs-on: ubuntu-latest
+    needs: [test-node]
+    defaults:
+      run:
+        working-directory: backend-python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Install Playwright browsers
+        run: playwright install chromium
+      - name: Start services via docker-compose
+        working-directory: .
+        run: |
+          docker compose up -d postgres redis
+          sleep 8
+      - name: Run e2e pipeline tests
+        run: pytest -v --tb=short -k "e2e"
+        env:
+          REDIS_URL: redis://localhost:6379/0
+          DATABASE_URL: postgresql://user:pass@localhost:5432/link_graveyard
+          NESTJS_INTERNAL_URL: http://localhost:3000
+          INTERNAL_WORKER_SECRET: test-secret
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: link_graveyard
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
-    needs: [test-node, test-python]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
+    needs: [test-node, test-python-unit, test-python-e2e]
+    if: github.ref == "refs/heads/main" && github.event_name == "push"
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      - uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and push API Gateway
         uses: docker/build-push-action@v5
         with:
@@ -137,7 +162,6 @@ jobs:
           tags: ghcr.io/${{ github.repository }}/api-gateway:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
       - name: Build and push Python Worker
         uses: docker/build-push-action@v5
         with:

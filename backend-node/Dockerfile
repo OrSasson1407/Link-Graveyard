@@ -1,4 +1,4 @@
-﻿FROM node:20-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
@@ -16,4 +16,5 @@ COPY --from=builder /app/prisma ./prisma
 RUN npx prisma generate
 USER nestjs
 EXPOSE 3000
+RUN npx prisma generate
 CMD ["node", "dist/main"]

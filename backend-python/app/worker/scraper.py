@@ -1,10 +1,17 @@
-﻿import asyncio
+import asyncio
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
-from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
+
+WORDS_PER_MINUTE = 200
+
+
+def estimate_reading_time(text: str) -> int:
+    """Returns estimated reading time in minutes (minimum 1)."""
+    word_count = len(text.split())
+    return max(1, round(word_count / WORDS_PER_MINUTE))
 
 
 async def extract_dom_context(url: str, timeout: int = 15000) -> dict:
@@ -16,52 +23,47 @@ async def extract_dom_context(url: str, timeout: int = 15000) -> dict:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         try:
-            # Wait until network is idle to capture SPA content
             await page.goto(url, wait_until="networkidle", timeout=timeout)
             content = await page.content()
             soup = BeautifulSoup(content, "html.parser")
 
-            # Extract Open Graph meta tags
-            og_title = soup.find("meta", property="og:title")
-            og_image = soup.find("meta", property="og:image")
+            og_title       = soup.find("meta", property="og:title")
+            og_image       = soup.find("meta", property="og:image")
             og_description = soup.find("meta", property="og:description")
 
-            # Extract main page title
             page_title = None
             if og_title and og_title.get("content"):
                 page_title = og_title["content"]
             elif soup.title and soup.title.string:
                 page_title = soup.title.string.strip()
 
-            # Extract image URL
-            image_url = None
-            if og_image and og_image.get("content"):
-                image_url = og_image["content"]
+            image_url = og_image["content"] if og_image and og_image.get("content") else None
+            description = og_description["content"] if og_description and og_description.get("content") else None
 
-            # Extract description
-            description = None
-            if og_description and og_description.get("content"):
-                description = og_description["content"]
-
-            # Extract main body text for AI summarization (first 10 paragraphs)
             paragraphs = soup.find_all("p")
             body_text = " ".join(
                 [p.get_text(strip=True) for p in paragraphs[:10] if p.get_text(strip=True)]
             )
 
-            # Extract meta description as fallback
             if not body_text:
                 meta_desc = soup.find("meta", attrs={"name": "description"})
                 if meta_desc and meta_desc.get("content"):
                     body_text = meta_desc["content"]
 
-            logger.info(f"DOM extraction complete for {url}")
+            # Full text for reading time (up to 50 paragraphs)
+            full_text = " ".join(
+                [p.get_text(strip=True) for p in paragraphs[:50] if p.get_text(strip=True)]
+            )
+            reading_time_minutes = estimate_reading_time(full_text) if full_text else None
+
+            logger.info(f"DOM extraction complete for {url} | reading_time={reading_time_minutes}min")
 
             return {
                 "title": page_title,
                 "image_url": image_url,
                 "description": description,
-                "raw_text_sample": body_text[:3000],  # Cap at 3000 chars for LLM
+                "raw_text_sample": body_text[:3000],
+                "reading_time_minutes": reading_time_minutes,
                 "success": True,
             }
 
@@ -72,6 +74,7 @@ async def extract_dom_context(url: str, timeout: int = 15000) -> dict:
                 "image_url": None,
                 "description": None,
                 "raw_text_sample": "",
+                "reading_time_minutes": None,
                 "success": False,
                 "error": str(e),
             }

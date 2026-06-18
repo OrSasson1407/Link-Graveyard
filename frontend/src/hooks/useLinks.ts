@@ -1,13 +1,17 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
-import { linksApi } from '../services/apiClient';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { linksApi } from "../services/apiClient";
 
-export const useLinks = (params?: { status?: string; page?: number; limit?: number; category?: string }) => {
+export const useLinks = (params?: {
+  status?: string;
+  page?: number;
+  limit?: number;
+  category?: string;
+  search?: string;
+}) => {
   const [links, setLinks] = useState<any[]>([]);
   const [meta, setMeta] = useState<{ total: number; page: number; limit: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Use a ref to keep track of the stringified params to prevent infinite loops
   const paramsRef = useRef(JSON.stringify(params));
 
   const fetchLinks = useCallback(async () => {
@@ -19,25 +23,21 @@ export const useLinks = (params?: { status?: string; page?: number; limit?: numb
       setLinks(response.data || []);
       setMeta(response.meta || null);
     } catch (err: any) {
-      setError(err?.response?.data?.error?.message || 'Failed to fetch links');
+      setError(err?.response?.data?.error?.message || "Failed to fetch links");
     } finally {
       setLoading(false);
     }
-  }, []); // Empty dependency array prevents re-creation
+  }, []);
 
   useEffect(() => {
-    // Only fetch if the actual values inside the params have changed
     const newParamsString = JSON.stringify(params);
-    if(paramsRef.current !== newParamsString) {
-        paramsRef.current = newParamsString;
-        fetchLinks();
+    if (paramsRef.current !== newParamsString) {
+      paramsRef.current = newParamsString;
+      fetchLinks();
     }
   }, [params, fetchLinks]);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchLinks();
-  }, [fetchLinks]);
+  useEffect(() => { fetchLinks(); }, [fetchLinks]);
 
   return { links, meta, loading, error, refetch: fetchLinks };
 };
@@ -53,7 +53,7 @@ export const useCreateLink = () => {
       const result = await linksApi.create(url, contextText);
       return result;
     } catch (err: any) {
-      const msg = err?.response?.data?.error?.message || 'Failed to create link';
+      const msg = err?.response?.data?.error?.message || "Failed to create link";
       setError(msg);
       throw err;
     } finally {
@@ -63,3 +63,13 @@ export const useCreateLink = () => {
 
   return { createLink, loading, error };
 };
+
+// Debounce helper
+export function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}

@@ -1,4 +1,4 @@
-﻿import { Process, Processor } from "@nestjs/bull";
+import { Process, Processor, OnQueueFailed } from "@nestjs/bull";
 import { Logger } from "@nestjs/common";
 import { Job } from "bull";
 import { QueueService } from "./queue.service";
@@ -17,26 +17,32 @@ export class QueueProcessor {
     private readonly eventsGateway: EventsGateway,
   ) {}
 
+  @OnQueueFailed()
+  async onFailed(job: Job, err: Error) {
+    const isLastAttempt = job.attemptsMade >= (job.opts.attempts ?? 1);
+    if (!isLastAttempt) return;
+    this.logger.error(`[DLQ] Moving job "${job.name}" to DLQ after ${job.attemptsMade} attempts: ${err.message}`);
+    await this.queueService.sendToDlq({
+      linkId: job.data.linkId,
+      jobName: job.name,
+      queue: "link-ingestion-queue",
+      error: err.message,
+      attempts: job.attemptsMade,
+      payload: job.data,
+    });
+  }
+
   @Process("ingest")
   async handleIngestion(job: Job) {
     const { linkId, url, userId, contextText } = job.data;
     this.logger.log(`Processing ingestion job for linkId=${linkId}`);
-
     try {
       new URL(url);
-      await this.queueService.addDomScrapingJob({
-        linkId,
-        url,
-        userId,
-        contextText,
-      });
+      await this.queueService.addDomScrapingJob({ linkId, url, userId, contextText });
       this.logger.log(`Ingestion complete, forwarded to scraping: ${linkId}`);
     } catch (err) {
       this.logger.error(`Ingestion failed for ${linkId}: ${err.message}`);
-      await this.prisma.link.update({
-        where: { id: linkId },
-        data: { status: "ERROR" },
-      });
+      await this.prisma.link.update({ where: { id: linkId }, data: { status: "ERROR" } });
       throw err;
     }
   }
@@ -45,7 +51,6 @@ export class QueueProcessor {
   async handleAiAnalysis(job: Job) {
     const { linkId, url, userId, title, rawTextSample, contextText } = job.data;
     this.logger.log(`Processing AI analysis job for linkId=${linkId}`);
-
     try {
       const result = await this.aiService.analyzeLink({
         url,
@@ -63,12 +68,22 @@ export class QueueProcessor {
               create: {
                 title: title || url,
                 aiSummary: result.summary,
-                dynamicData: { tags: result.dynamic_tags },
+                dynamicData: {
+                  tags: result.dynamic_tags,
+                  confidence: result.confidence,
+                  intent: result.intent,
+                  analyzedAt: new Date().toISOString(),
+                },
               },
               update: {
                 title: title || url,
                 aiSummary: result.summary,
-                dynamicData: { tags: result.dynamic_tags },
+                dynamicData: {
+                  tags: result.dynamic_tags,
+                  confidence: result.confidence,
+                  intent: result.intent,
+                  analyzedAt: new Date().toISOString(),
+                },
               },
             },
           },
@@ -83,7 +98,7 @@ export class QueueProcessor {
 
       this.eventsGateway.emitLinkProcessed(userId, linkId, result);
       await this.queueService.addReminderSchedulerJob({ userId });
-      this.logger.log(`AI analysis complete for ${linkId}`);
+      this.logger.log(`AI analysis complete for ${linkId} | confidence=${result.confidence}`);
     } catch (err) {
       this.logger.error(`AI analysis failed for ${linkId}: ${err.message}`);
       throw err;
@@ -94,6 +109,5 @@ export class QueueProcessor {
   async handleReminderSchedule(job: Job) {
     const { userId } = job.data;
     this.logger.log(`Processing reminder schedule job for userId=${userId}`);
-    // Handled by RemindersWorker cron — this is a no-op intentionally
   }
 }

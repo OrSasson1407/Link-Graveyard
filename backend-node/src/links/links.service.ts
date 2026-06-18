@@ -1,8 +1,9 @@
-﻿import {
+import {
   Injectable,
   Logger,
   NotFoundException,
   ForbiddenException,
+  ConflictException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { QueueService } from "../queues/queue.service";
@@ -23,6 +24,18 @@ export class LinksService {
     dto: { url: string; source: string; context_text?: string },
   ) {
     this.logger.log(`Creating link for user ${userId}`);
+
+    const existing = await this.prisma.link.findFirst({
+      where: { userId, originalUrl: dto.url, deletedAt: null },
+      select: { id: true, status: true },
+    });
+    if (existing) {
+      throw new ConflictException({
+        message: "URL already saved",
+        link_id: existing.id,
+        status: existing.status,
+      });
+    }
 
     const link = await this.prisma.link.create({
       data: {
@@ -53,18 +66,13 @@ export class LinksService {
 
   async findAll(
     userId: string,
-    query: {
-      status?: string;
-      page?: number;
-      limit?: number;
-      category?: string;
-    },
+    query: { status?: string; page?: number; limit?: number; category?: string },
   ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: any = { userId };
+    const where: any = { userId, deletedAt: null };
     if (query.status) where.status = query.status;
     else where.status = "ACTIVE";
     if (query.category) where.category = query.category;
@@ -103,21 +111,45 @@ export class LinksService {
   }
 
   async updateStatus(id: string, userId: string, status: string) {
-    const link = await this.prisma.link.findUnique({ where: { id } });
+    const link = await this.prisma.link.findFirst({ where: { id, deletedAt: null } });
     if (!link) throw new NotFoundException("Link not found");
     if (link.userId !== userId) throw new ForbiddenException("Access denied");
-
-    const updated = await this.prisma.link.update({
-      where: { id },
-      data: { status },
-    });
-
+    const updated = await this.prisma.link.update({ where: { id }, data: { status } });
     return { id: updated.id, status: updated.status };
   }
 
+  async softDelete(id: string, userId: string) {
+    const link = await this.prisma.link.findFirst({ where: { id, deletedAt: null } });
+    if (!link) throw new NotFoundException("Link not found");
+    if (link.userId !== userId) throw new ForbiddenException("Access denied");
+    await this.prisma.link.update({ where: { id }, data: { deletedAt: new Date() } });
+    return { id, deleted: true };
+  }
+
+  // ── Step 8: Re-analyze on demand ──────────────────────────────────────────
+  async reanalyze(id: string, userId: string) {
+    const link = await this.prisma.link.findFirst({
+      where: { id, deletedAt: null },
+      include: { metadata: true },
+    });
+    if (!link) throw new NotFoundException("Link not found");
+    if (link.userId !== userId) throw new ForbiddenException("Access denied");
+
+    await this.prisma.link.update({ where: { id }, data: { status: "PENDING" } });
+
+    await this.queueService.addLinkIngestionJob({
+      linkId: link.id,
+      url: link.originalUrl,
+      userId,
+      contextText: undefined,
+    });
+
+    return { message: "Re-analysis queued", data: { link_id: id, status: "PENDING" } };
+  }
+
   async reconstructContext(id: string, userId: string) {
-    const link = await this.prisma.link.findUnique({
-      where: { id },
+    const link = await this.prisma.link.findFirst({
+      where: { id, deletedAt: null },
       include: { intent: true, metadata: true },
     });
     if (!link) throw new NotFoundException("Link not found");
@@ -134,10 +166,9 @@ export class LinksService {
       : "";
     const title = link.metadata?.title ?? link.originalUrl;
 
-    const reconstructed_story =
-      `You saved "${title}" on ${savedAt} from ${source}. ${context}`.trim();
-
-    return { reconstructed_story };
+    return {
+      reconstructed_story: `You saved "${title}" on ${savedAt} from ${source}. ${context}`.trim(),
+    };
   }
 
   async markAsProcessed(
@@ -152,7 +183,6 @@ export class LinksService {
     },
   ) {
     this.logger.log(`Marking link ${linkId} as processed`);
-
     const updated = await this.prisma.link.update({
       where: { id: linkId },
       data: {
@@ -174,15 +204,10 @@ export class LinksService {
             },
           },
         },
-        intent: {
-          update: {
-            inferredAction: data.inferredAction ?? null,
-          },
-        },
+        intent: { update: { inferredAction: data.inferredAction ?? null } },
       },
       include: { metadata: true, intent: true },
     });
-
     return updated;
   }
 }

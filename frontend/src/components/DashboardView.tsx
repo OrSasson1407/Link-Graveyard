@@ -218,7 +218,7 @@ export default function DashboardView({
             <div className="flex items-baseline gap-3 mt-2">
               <h3 className={`text-3xl font-headline font-bold ${isLightTheme ? "text-indigo-950" : "text-gray-100"}`}>{totalBuriest}</h3>
               <span className="text-[10px] font-mono text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-bold">
-                +12 this week
+                all time
               </span>
             </div>
             <p className={`text-[11px] mt-2 ${isLightTheme ? "text-gray-500" : "text-gray-400"}`}>Permanently preserved from server rot.</p>
@@ -252,7 +252,7 @@ export default function DashboardView({
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                 isLightTheme ? "bg-gray-100 border-gray-200 text-gray-500" : "bg-[#1f2029] border-[#2d2c3d] text-gray-400"
               }`}>
-                Queue: 00
+                processing: 0
               </span>
             </div>
             <p className={`text-[11px] mt-2 ${isLightTheme ? "text-gray-500" : "text-gray-400"}`}>Clean semantic layers successfully computed.</p>
@@ -507,3 +507,4 @@ export default function DashboardView({
     </div>
   );
 }
+

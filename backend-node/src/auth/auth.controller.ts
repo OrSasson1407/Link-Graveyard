@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Post,
   Body,
@@ -9,6 +9,7 @@
   UnauthorizedException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import { Response, Request } from "express";
 import { AuthService } from "./auth.service";
 import { IsEmail, IsString, MinLength } from "class-validator";
@@ -36,12 +37,14 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post("register")
+  @Throttle({ auth: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: "Register a new user" })
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto.email, dto.password);
   }
 
   @Post("login")
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Login and receive JWT tokens" })
   async login(
@@ -49,18 +52,17 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const tokens = await this.authService.login(dto.email, dto.password);
-
     res.cookie("refresh_token", tokens.refreshToken, {
       httpOnly: true,
       sameSite: "strict",
       secure: process.env.NODE_ENV === "production",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-
     return { accessToken: tokens.accessToken };
   }
 
   @Post("refresh")
+  @Throttle({ auth: { limit: 20, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Refresh access token using HttpOnly cookie" })
   async refresh(
@@ -71,14 +73,12 @@ export class AuthController {
     if (!refreshToken) throw new UnauthorizedException("No refresh token");
 
     const tokens = await this.authService.refresh(refreshToken);
-
     res.cookie("refresh_token", tokens.refreshToken, {
       httpOnly: true,
       sameSite: "strict",
       secure: process.env.NODE_ENV === "production",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-
     return { accessToken: tokens.accessToken };
   }
 

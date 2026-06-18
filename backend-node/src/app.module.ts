@@ -1,6 +1,7 @@
-﻿import { Module } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { ThrottlerModule } from "@nestjs/throttler";
+import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
+import { APP_GUARD } from "@nestjs/core";
 import { ScheduleModule } from "@nestjs/schedule";
 import { AuthModule } from "./auth/auth.module";
 import { LinksModule } from "./links/links.module";
@@ -14,11 +15,16 @@ import { MonetizationModule } from "./monetization/monetization.module";
 import { InternalModule } from "./internal/internal.module";
 import { PrismaService } from "./prisma.service";
 import { MetricsController } from "./common/metrics/metrics.controller";
+import { validate } from "./config.validation";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
+    ConfigModule.forRoot({ isGlobal: true, validate }),
+    ThrottlerModule.forRoot([
+      { name: "global",  ttl: 60000, limit: 60 },
+      { name: "auth",    ttl: 60000, limit: 10 },
+      { name: "ingest",  ttl: 60000, limit: 20 },
+    ]),
     ScheduleModule.forRoot(),
     AuthModule,
     LinksModule,
@@ -32,6 +38,9 @@ import { MetricsController } from "./common/metrics/metrics.controller";
     InternalModule,
   ],
   controllers: [MetricsController],
-  providers: [PrismaService],
+  providers: [
+    PrismaService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

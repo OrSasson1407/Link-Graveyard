@@ -14,7 +14,7 @@ model User {
   passwordHash String   @map("password_hash") @db.VarChar
   preferences  Json?    @default("{}")
   planType     String?  @default("FREE") @map("plan_type")
-  tzOffset     String?  @map("tz_offset")
+  timezone     String?  @default("UTC") @map("timezone") @db.VarChar(64)
   createdAt    DateTime @default(now()) @map("created_at")
 
   links        Link[]
@@ -24,12 +24,13 @@ model User {
 }
 
 model Link {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  originalUrl String   @map("original_url") @db.Text
-  status      String   @default("PENDING") @db.VarChar(50)
-  category    String?  @db.VarChar(50)
-  createdAt   DateTime @default(now()) @map("created_at")
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  originalUrl String    @map("original_url") @db.Text
+  status      String    @default("PENDING") @db.VarChar(50)
+  category    String?   @db.VarChar(50)
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   metadata    LinkMetadata?
@@ -37,17 +38,20 @@ model Link {
   reminders   ReminderSchedule[]
 
   @@index([userId, status])
+  @@index([userId, originalUrl])
   @@map("links")
 }
 
 model LinkMetadata {
-  linkId       String  @id @map("link_id") @db.Uuid
-  title        String? @db.VarChar(500)
-  aiSummary    String? @map("ai_summary") @db.Text
-  previewImage String? @map("preview_image") @db.Text
-  dynamicData  Json?   @default("{}") @map("dynamic_data")
+  linkId              String   @id @map("link_id") @db.Uuid
+  title               String?  @db.VarChar(500)
+  aiSummary           String?  @map("ai_summary") @db.Text
+  previewImage        String?  @map("preview_image") @db.Text
+  dynamicData         Json?    @default("{}") @map("dynamic_data")
+  aiConfidence        Float?   @map("ai_confidence")
+  readingTimeMinutes  Int?     @map("reading_time_minutes")
 
-  link         Link    @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  link                Link     @relation(fields: [linkId], references: [id], onDelete: Cascade)
 
   @@map("link_metadata")
 }

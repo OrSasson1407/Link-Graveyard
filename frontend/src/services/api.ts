@@ -1,23 +1,17 @@
-﻿import axios from 'axios';
+import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000",
+  headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });
 
-// Attach JWT token to every request
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  const token = localStorage.getItem("access_token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// On 401, try refresh — if that fails, clear token and redirect
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -26,17 +20,17 @@ api.interceptors.response.use(
       original._retry = true;
       try {
         const res = await axios.post(
-          'http://localhost:3000/api/v1/auth/refresh',
+          (import.meta.env.VITE_API_BASE_URL || "http://localhost:3000") + "/api/v1/auth/refresh",
           {},
           { withCredentials: true }
         );
         const { accessToken } = res.data;
-        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem("access_token", accessToken);
         original.headers.Authorization = `Bearer ${accessToken}`;
         return api(original);
       } catch {
-        localStorage.removeItem('access_token');
-        window.location.href = '/';
+        // Token refresh failed � clear token but DO NOT redirect (let React handle it)
+        localStorage.removeItem("access_token");
       }
     }
     return Promise.reject(error);

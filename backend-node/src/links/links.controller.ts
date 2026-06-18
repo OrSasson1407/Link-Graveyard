@@ -1,8 +1,9 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
   Put,
+  Delete,
   Param,
   Body,
   Query,
@@ -30,7 +31,7 @@ export class CreateLinkDto {
 }
 
 export class UpdateLinkStatusDto {
-  @IsIn(["ACTIVE", "ARCHIVED", "DELETED"])
+  @IsIn(["ACTIVE", "ARCHIVED", "FAILED"])
   status: string;
 }
 
@@ -42,11 +43,11 @@ export class LinksController {
   constructor(private readonly linksService: LinksService) {}
 
   @Post()
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ ingest: { limit: 20, ttl: 60000 } })
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: "Submit a new link for processing" })
   async create(@Body() dto: CreateLinkDto, @Request() req) {
-    return this.linksService.create(req.user.id, dto);
+    return this.linksService.create(req.user.userId, dto);
   }
 
   @Get()
@@ -58,7 +59,7 @@ export class LinksController {
     @Query("limit") limit = "20",
     @Query("category") category?: string,
   ) {
-    return this.linksService.findAll(req.user.id, {
+    return this.linksService.findAll(req.user.userId, {
       status,
       page: parseInt(page),
       limit: parseInt(limit),
@@ -73,12 +74,27 @@ export class LinksController {
     @Body() dto: UpdateLinkStatusDto,
     @Request() req,
   ) {
-    return this.linksService.updateStatus(id, req.user.id, dto.status);
+    return this.linksService.updateStatus(id, req.user.userId, dto.status);
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Soft-delete a link" })
+  async softDelete(@Param("id") id: string, @Request() req) {
+    return this.linksService.softDelete(id, req.user.userId);
+  }
+
+  @Post(":id/reanalyze")
+  @Throttle({ ingest: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: "Re-trigger AI analysis for a link" })
+  async reanalyze(@Param("id") id: string, @Request() req) {
+    return this.linksService.reanalyze(id, req.user.userId);
   }
 
   @Get(":id/why-did-i-save-this")
   @ApiOperation({ summary: "Reconstruct context for a saved link" })
   async whyDidISaveThis(@Param("id") id: string, @Request() req) {
-    return this.linksService.reconstructContext(id, req.user.id);
+    return this.linksService.reconstructContext(id, req.user.userId);
   }
 }

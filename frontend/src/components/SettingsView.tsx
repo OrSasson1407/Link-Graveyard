@@ -327,18 +327,18 @@ export default function SettingsView({
                     }}
                     >
                       <div className="flex items-center justify-between text-[8px] font-mono text-gray-500 mb-1">
-                        <span>github.com/react</span>
+                        <span>your saved link</span>
                         <span>Saved 2h ago</span>
                       </div>
 
                       <h4 className="text-xs font-bold leading-snug">
-                        Understanding React Server Components Architecture
+                        Your first saved link will appear here
                       </h4>
 
                       <p className={`text-[10px] mt-1 leading-normal line-clamp-2 ${
                         appearance.theme === "light" ? "text-gray-600" : "text-gray-400"
                       }`}>
-                        RSCs execute entirely on the server, resulting in zero bundle size cost for the client.
+                        Save your first link to see how it looks in your archive.
                       </p>
 
                       <div className="flex gap-1.5 mt-3 select-none">
@@ -347,14 +347,14 @@ export default function SettingsView({
                           appearance.accent === "emerald" ? "bg-emerald-500/10 text-emerald-400" :
                           "bg-rose-500/10 text-rose-400"
                         }`}>
-                          #react
+                          #link
                         </span>
                         <span className={`text-[8px] font-mono px-1 py-0.2 rounded ${
                           appearance.accent === "indigo" ? "bg-indigo-500/10 text-indigo-400" :
                           appearance.accent === "emerald" ? "bg-emerald-500/10 text-emerald-400" :
                           "bg-rose-500/10 text-rose-400"
                         }`}>
-                          #architecture
+                          #archive
                         </span>
                       </div>
 
@@ -417,7 +417,7 @@ export default function SettingsView({
                     : "bg-[#0a0b0d] border border-[#1a1c22]"
                 }`}>
                   <p className="text-xs text-gray-500">
-                    Your dynamic endpoint base url is: <code className={`px-1.5 py-0.5 rounded font-mono text-[11px] ${isLightTheme ? "text-indigo-600 bg-indigo-50" : "text-indigo-400 bg-[#161720]"}`}>https://graveyard.ai-studio/api/v2</code>
+                    Your dynamic endpoint base url is: <code className={`px-1.5 py-0.5 rounded font-mono text-[11px] ${isLightTheme ? "text-indigo-600 bg-indigo-50" : "text-indigo-400 bg-[#161720]"}`}>http://localhost:3000/api/v1</code>
                   </p>
                   <p className="text-[11px] text-gray-500">
                     Use this to send automated POST payloads containing article links from scripts, automation recipes, or command runners.
@@ -433,3 +433,4 @@ export default function SettingsView({
     </div>
   );
 }
+

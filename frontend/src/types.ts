@@ -1,7 +1,3 @@
-/**
- * Types representing state and payloads for Link Graveyard (Sovereign Archive)
- */
-
 export interface Bookmark {
   id: string;
   title: string;
@@ -14,6 +10,7 @@ export interface Bookmark {
   domain: string;
   readingTime?: string;
   isRead: boolean;
+  confidence?: number;
 }
 
 export interface BillingHistory {
@@ -29,7 +26,7 @@ export interface AnalyticsData {
   density: number;
   revivalRate: number;
   tagsCount: Record<string, number>;
-  peakActivity: number[]; // Array of values representing hour slots
+  peakActivity: number[];
 }
 
 export interface AppearanceSettings {
